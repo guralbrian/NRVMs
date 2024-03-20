@@ -46,3 +46,17 @@ dds <- DESeq(dds)
 
 # Save the results 
 saveRDS(dds, "data/processed/deseq/deseq.RDS")
+names <- resultsNames(dds)[-c(1:3)]
+
+# make a list of each result
+dds <- lapply(names, function(x){
+  results(dds, name=x) |> 
+    as.data.frame()
+})
+
+names_clean <- lapply(str_split(names, "treatment_"), "[[", 2) |> unlist()
+
+
+for(i in 1:length(go.res)){
+  write.csv(dds[[i]], paste0("results/04_deseq/", names_clean[[i]], "_DESeq.csv"))
+}

@@ -1,28 +1,19 @@
 # ClusterProfiler analysis
 libs <- c("tidyverse", "clusterProfiler", "DESeq2", 
-          "org.Mm.eg.db", "viridis", "stringr", "patchwork") # list libraries here
+          "org.Rn.eg.db", "viridis", "stringr", "patchwork") # list libraries here
 lapply(libs, require, character.only = T)
 rm(libs)
 
 
 # Load the results and expression matrices
-adj.res <- readRDS("data/processed/models/adjusted_de_interaction.RDS")  
-adj.names <- resultsNames(adj.res)[-1]
-
+res <- readRDS("data/processed/deseq/deseq.RDS")  
+names <- resultsNames(res)[-c(1:3)]
+names_clean <- lapply(str_split(names, "treatment_"), "[[", 2) |> unlist()
 # make a list of each result
-adj.res <- lapply(adj.names, function(x){
-  results(adj.res, name=x) |> 
+res <- lapply(names, function(x){
+  results(res, name=x) |> 
     as.data.frame()
 })
-
-unadj.res <- readRDS("data/processed/models/unadjusted_de_interaction.RDS")  
-unadj.names <- resultsNames(unadj.res)[-1]
-
-unadj.res <- lapply(unadj.names, function(x){
-  results(unadj.res, name=x) |> 
-    as.data.frame()
-})
-
 
 # Function to perform GO enrichment with clusterProfiler
 runGo <- function(data, onto){
@@ -33,11 +24,11 @@ sig.genes <- data |>
 # Convert common gene names to ENSEMBLE IDs for clusterProfiler
 gene.df <- bitr(sig.genes, fromType = "SYMBOL",
                 toType = c("ENSEMBL"),
-                OrgDb = org.Mm.eg.db)
+                OrgDb = org.Rn.eg.db)
 
 # Check for enrichment within biological process gene clusters
 ego <- enrichGO(gene          = gene.df$ENSEMBL,
-                OrgDb         = org.Mm.eg.db,
+                OrgDb         = org.Rn.eg.db,
                 keyType = "ENSEMBL",
                 ont           = onto,
                 pAdjustMethod = "BH",
@@ -48,8 +39,14 @@ ego <- enrichGO(gene          = gene.df$ENSEMBL,
 }
 
 # Apply the function
-go.adj   <- lapply(adj.res,   function(x){runGo(x, "BP")})
-go.unadj <- lapply(unadj.res, function(x){runGo(x, "BP")})
+go.res   <- lapply(res, function(x){runGo(x, "BP")})
+
+# Save GO Results
+
+for(i in 1:length(go.res)){
+  write.csv(go.res[[i]]@result, paste0("results/07_clusterProfiler/", names_clean[[i]], "_GO.csv"),
+            row.names = F)
+}
 
 plotGO <- function(x, title){
 df <- x |> 
@@ -59,7 +56,7 @@ df <- x |>
                     str_wrap(width = 18) |> 
                      factor()) |> 
   arrange(desc(qscore)) |> 
-  slice_head(n = 6) 
+  slice_head(n = 10) 
 df$desc.wrap <- factor(df$desc.wrap, levels = rev(df$desc.wrap))
 
 p.ego <- ggplot(df, aes(x = desc.wrap, y = qscore, fill = p.adjust)) +
@@ -71,7 +68,9 @@ p.ego <- ggplot(df, aes(x = desc.wrap, y = qscore, fill = p.adjust)) +
       axis.title.y = element_blank(),
       panel.background = element_blank(),
       panel.grid.major = element_line(color = "darkgray"),
-      legend.position = "bottom"
+      legend.position = "bottom",
+      legend.key.width=unit(1,"in"),
+      title = element_text(size = 20)
     ) +
     labs(fill = "Adjusted\np-value",
          y = "Q Score",
@@ -79,30 +78,18 @@ p.ego <- ggplot(df, aes(x = desc.wrap, y = qscore, fill = p.adjust)) +
 }
 
 # Make title lists
-adj.titles <- c("CAD", "cmAKO", "Cardiomyocytes", "Fibroblasts", "CAD x cmAKO")
-unadj.titles <- c("CAD", "cmAKO", "CAD x cmAKO")
+titles <- c("100nM A6", "1uM ISO", "1uM NE", "1uM PE", "50uM PE")
 
-p.adj <- lapply(1:length(go.adj), function(n){plotGO(go.adj[[n]], adj.titles[[n]])})
-p.unadj <- lapply(1:length(go.unadj), function(n){plotGO(go.unadj[[n]], unadj.titles[[n]])})
+p.res <- lapply(1:length(go.res), function(n){plotGO(go.res[[n]], titles[[n]])})
 
 # Save plot to results 
-png(file = "results/11_clusterProfiler/adj_interaction_clusters.png",
-    width = 21, 
-    height = 14,
+png(file = "results/07_clusterProfiler/go_clusters.png",
+    width = 38, 
+    height = 16,
     units = "in",
     res = 300)
 
-wrap_plots(p.adj)
-
-dev.off()
-
-png(file = "results/11_clusterProfiler/unadj_interaction_clusters.png",
-    width = 21, 
-    height = 7,
-    units = "in",
-    res = 300)
-
-wrap_plots(p.unadj)
+wrap_plots(p.res)
 
 dev.off()
 

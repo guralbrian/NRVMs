@@ -11,8 +11,9 @@ pheno.clean <- data.frame(
   treatment.2 = lapply(pheno.split, "[[", 3) |> unlist()) |> 
   mutate(treatment = case_when(
     treatment == "Ctl" ~ treatment,
-    .default = paste(treatment, treatment.2)
+    .default = paste(treatment, treatment.2, sep = "_")
   )) |> 
-  select(-treatment.2)
+  dplyr::select(-treatment.2)
 
+write.csv(pheno.clean, "data/processed/bulk/phenotypes.csv", row.names = F)
 
